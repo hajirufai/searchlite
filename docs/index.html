@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SearchLite — Full-Text Search Engine from Scratch</title>
+<meta name="description" content="A full-text search engine built from scratch in Python. Inverted index, BM25 scoring, Porter stemmer, query parser. Zero dependencies.">
+<style>
+/* Hallmark · macrostructure: Stat-Led · oklch palette · 2+1 fonts */
+:root {
+  --ink: oklch(0.18 0.01 260);
+  --bg: oklch(0.985 0.005 80);
+  --accent: oklch(0.55 0.18 155);
+  --accent-dim: oklch(0.42 0.12 155);
+  --muted: oklch(0.55 0.015 260);
+  --rule: oklch(0.82 0.01 260);
+  --card-bg: oklch(0.97 0.005 80);
+  --mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', ui-monospace, monospace;
+  --sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --serif: 'Newsreader', 'Iowan Old Style', 'Palatino Linotype', serif;
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfAZ9hiA.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuI6fAZ9hiA.woff2') format('woff2');
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Newsreader';
+  src: url('https://fonts.gstatic.com/s/newsreader/v21/cY9qfjOCX1hbuyalUrK49dLac06G1ZGsZBtoBCzBDXXD9JVF438w-IrhR0_2GmQ.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── NAV ── */
+nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 2rem;
+  max-width: 72rem;
+  margin: 0 auto;
+}
+nav .logo {
+  font-weight: 600;
+  font-size: 1.1rem;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-decoration: none;
+}
+nav .logo span { color: var(--accent); }
+nav a.gh {
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-decoration: none;
+  border: 1px solid var(--rule);
+  padding: 0.4rem 1rem;
+  border-radius: 4px;
+  transition: color 0.2s, border-color 0.2s;
+}
+nav a.gh:hover { color: var(--ink); border-color: var(--muted); }
+
+/* ── STAT HERO ── */
+.stat-hero {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 6rem 2rem 4rem;
+  text-align: center;
+}
+.figure {
+  font-family: var(--mono);
+  font-size: clamp(5rem, 12vw, 10rem);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.figure .unit {
+  font-size: 0.45em;
+  color: var(--accent);
+  vertical-align: super;
+  margin-left: 0.05em;
+}
+.qualifier {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1.15rem;
+  color: var(--muted);
+  margin-top: 0.6rem;
+  max-width: 36rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+.hero-desc {
+  margin-top: 2rem;
+  font-size: 1.05rem;
+  color: var(--muted);
+  max-width: 42rem;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.7;
+}
+.hero-cta {
+  display: inline-block;
+  margin-top: 2rem;
+  padding: 0.65rem 1.5rem;
+  border: 1.5px solid var(--accent);
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: 3px;
+  transition: background 0.2s, color 0.2s;
+}
+.hero-cta:hover { background: var(--accent); color: var(--bg); }
+
+/* ── STATS GRID ── */
+.stats-grid {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 2rem 4rem;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--rule);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+.stat-cell {
+  background: var(--bg);
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+.stat-num {
+  font-family: var(--mono);
+  font-size: 2.2rem;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.stat-label {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-top: 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ── CODE DEMO ── */
+.code-section {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 4rem 2rem;
+}
+.code-section h2 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 1.5rem;
+}
+pre.demo {
+  background: oklch(0.14 0.01 260);
+  color: oklch(0.88 0.01 80);
+  padding: 2rem 2.5rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  line-height: 1.7;
+  tab-size: 4;
+}
+pre .kw { color: oklch(0.72 0.14 280); }
+pre .fn { color: oklch(0.75 0.15 155); }
+pre .str { color: oklch(0.72 0.12 80); }
+pre .cmt { color: oklch(0.50 0.02 260); font-style: italic; }
+pre .num { color: oklch(0.75 0.14 40); }
+
+/* ── FEATURES ── */
+.features {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 2rem 2rem 4rem;
+  border-top: 1px solid var(--rule);
+}
+.features h2 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 2rem;
+}
+.feat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+}
+.feat {
+  padding: 1.5rem;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+}
+.feat h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  letter-spacing: -0.01em;
+}
+.feat p {
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+/* ── QUERY SYNTAX ── */
+.syntax {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 2rem 2rem 4rem;
+  border-top: 1px solid var(--rule);
+}
+.syntax h2 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 1.5rem;
+}
+.syntax table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.syntax td, .syntax th {
+  padding: 0.6rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--rule);
+}
+.syntax th {
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.syntax code {
+  font-family: var(--mono);
+  font-size: 0.85em;
+  background: var(--card-bg);
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+}
+
+/* ── ARCH DIAGRAM ── */
+.arch {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 2rem 2rem 4rem;
+  border-top: 1px solid var(--rule);
+}
+.arch h2 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 1.5rem;
+}
+.arch-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+}
+.arch-block {
+  background: var(--card-bg);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 1.2rem;
+  text-align: center;
+}
+.arch-block .layer-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  margin-bottom: 0.5rem;
+}
+.arch-block h4 {
+  font-size: 0.92rem;
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+}
+.arch-block p {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.arch-arrow {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--rule);
+  font-size: 1.4rem;
+  padding: 0.3rem 0;
+}
+
+/* ── FOOTER ── */
+footer {
+  border-top: 1px solid var(--rule);
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+footer a { color: var(--muted); text-decoration: none; }
+footer a:hover { color: var(--ink); }
+
+@media (max-width: 768px) {
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .feat-grid { grid-template-columns: 1fr; }
+  .arch-grid { grid-template-columns: repeat(2, 1fr); }
+  .stat-hero { padding: 4rem 1.5rem 3rem; }
+  .figure { font-size: clamp(3.5rem, 14vw, 7rem); }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="#" class="logo">Search<span>Lite</span></a>
+  <a href="https://github.com/hajirufai/searchlite" class="gh">GitHub →</a>
+</nav>
+
+<section class="stat-hero">
+  <div class="figure" id="hero-num">194</div>
+  <p class="qualifier">passing tests. Zero external dependencies.</p>
+  <p class="hero-desc">
+    A full-text search engine built entirely from scratch in Python.
+    Inverted indexing, BM25 ranking, Porter stemming, recursive descent query parsing,
+    faceted search, and persistent storage — all from the standard library.
+  </p>
+  <a href="https://github.com/hajirufai/searchlite" class="hero-cta">View source →</a>
+</section>
+
+<div class="stats-grid">
+  <div class="stat-cell">
+    <div class="stat-num">16</div>
+    <div class="stat-label">Core modules</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-num">0.26<span style="font-size:0.6em">ms</span></div>
+    <div class="stat-label">Avg query time</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-num">~4,400</div>
+    <div class="stat-label">Lines of code</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-num">0</div>
+    <div class="stat-label">Dependencies</div>
+  </div>
+</div>
+
+<section class="code-section">
+  <h2>Quick start</h2>
+  <pre class="demo"><span class="kw">from</span> searchlite <span class="kw">import</span> <span class="fn">SearchEngine</span>, <span class="fn">Schema</span>, <span class="fn">TextField</span>, <span class="fn">KeywordField</span>
+
+engine = <span class="fn">SearchEngine</span>(schema=<span class="fn">Schema</span>(
+    title=<span class="fn">TextField</span>(boost=<span class="num">2.0</span>),
+    body=<span class="fn">TextField</span>(),
+    tags=<span class="fn">KeywordField</span>(faceted=<span class="kw">True</span>),
+))
+
+engine.<span class="fn">add</span>({
+    <span class="str">"title"</span>: <span class="str">"Building Data Pipelines"</span>,
+    <span class="str">"body"</span>: <span class="str">"A guide to ETL with Python and Apache Kafka"</span>,
+    <span class="str">"tags"</span>: [<span class="str">"data-engineering"</span>, <span class="str">"python"</span>],
+})
+
+<span class="cmt"># BM25-ranked results with highlighting</span>
+results = engine.<span class="fn">search</span>(<span class="str">"python AND kafka"</span>)
+<span class="kw">for</span> hit <span class="kw">in</span> results:
+    print(hit.score, hit.<span class="fn">highlight</span>(<span class="str">"body"</span>))</pre>
+</section>
+
+<section class="features">
+  <h2>What's under the hood</h2>
+  <div class="feat-grid">
+    <div class="feat">
+      <h3>Inverted Index</h3>
+      <p>Term → document mapping with position tracking, term frequencies, and field-level storage. Add, remove, and serialize document sets.</p>
+    </div>
+    <div class="feat">
+      <h3>BM25 &amp; TF-IDF Scoring</h3>
+      <p>Okapi BM25 with tunable k1 and b parameters. Length normalization, field boosting, and diminishing-return term frequency saturation.</p>
+    </div>
+    <div class="feat">
+      <h3>Porter Stemmer</h3>
+      <p>All five steps of the original Porter stemming algorithm. "running" → "run", "connected" → "connect", "generalization" → "gener".</p>
+    </div>
+    <div class="feat">
+      <h3>Query Parser</h3>
+      <p>Recursive descent parser handling AND, OR, NOT, phrase queries, wildcards, field-specific search, boost operators, and parenthesized grouping.</p>
+    </div>
+    <div class="feat">
+      <h3>Faceted Search</h3>
+      <p>Multi-field facet counting with value filtering. Search for "python", get back tag distributions and filter by category — like Elasticsearch aggregations.</p>
+    </div>
+    <div class="feat">
+      <h3>Persistent Storage</h3>
+      <p>JSON-based segment files with metadata tracking and compaction. Save your index to disk, reload it later. Context-manager support for clean shutdown.</p>
+    </div>
+  </div>
+</section>
+
+<section class="syntax">
+  <h2>Query syntax</h2>
+  <table>
+    <thead>
+      <tr><th>Query</th><th>What it does</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>python data</code></td><td>Implicit AND — both terms required</td></tr>
+      <tr><td><code>python OR java</code></td><td>Either term matches</td></tr>
+      <tr><td><code>NOT python</code></td><td>Exclude documents containing "python"</td></tr>
+      <tr><td><code>"machine learning"</code></td><td>Exact phrase with positional matching</td></tr>
+      <tr><td><code>title:python</code></td><td>Search only the title field</td></tr>
+      <tr><td><code>title:"data science"</code></td><td>Phrase in a specific field</td></tr>
+      <tr><td><code>pyth*</code></td><td>Prefix wildcard expansion</td></tr>
+      <tr><td><code>python^2.0</code></td><td>Boost a term's weight</td></tr>
+      <tr><td><code>(python OR java) AND data</code></td><td>Grouped boolean logic</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="arch">
+  <h2>Architecture</h2>
+  <div class="arch-grid">
+    <div class="arch-block" style="grid-column: 1 / -1;">
+      <div class="layer-label">API Layer</div>
+      <h4>SearchEngine</h4>
+      <p>High-level interface — add, search, commit, stats</p>
+    </div>
+    <div class="arch-arrow">↓</div>
+    <div class="arch-block">
+      <div class="layer-label">Execution</div>
+      <h4>Searcher</h4>
+      <p>Query → postings → score → rank</p>
+    </div>
+    <div class="arch-block">
+      <div class="layer-label">Ranking</div>
+      <h4>BM25 Scorer</h4>
+      <p>TF saturation, IDF, length norm</p>
+    </div>
+    <div class="arch-block">
+      <div class="layer-label">Parsing</div>
+      <h4>Query Parser</h4>
+      <p>Recursive descent with precedence</p>
+    </div>
+    <div class="arch-block">
+      <div class="layer-label">Display</div>
+      <h4>Highlighter</h4>
+      <p>Best-passage snippet extraction</p>
+    </div>
+    <div class="arch-arrow">↓</div>
+    <div class="arch-block">
+      <div class="layer-label">Core</div>
+      <h4>Inverted Index</h4>
+      <p>Posting lists, positions, term lookup</p>
+    </div>
+    <div class="arch-block">
+      <div class="layer-label">Analysis</div>
+      <h4>Analyzer</h4>
+      <p>Tokenize → normalize → stem → filter</p>
+    </div>
+    <div class="arch-block">
+      <div class="layer-label">Schema</div>
+      <h4>Field Types</h4>
+      <p>Text, Keyword, Numeric definitions</p>
+    </div>
+    <div class="arch-block">
+      <div class="layer-label">Persistence</div>
+      <h4>Storage</h4>
+      <p>JSON segments with compaction</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <span>SearchLite — Haji Rufai</span>
+  <a href="https://github.com/hajirufai/searchlite">github.com/hajirufai/searchlite</a>
+</footer>
+
+<script>
+// Number tick animation for hero stat
+(function() {
+  const el = document.getElementById('hero-num');
+  const target = 194;
+  const duration = 800;
+  let start = null;
+  function tick(ts) {
+    if (!start) start = ts;
+    const progress = Math.min((ts - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    el.textContent = Math.round(eased * target);
+    if (progress < 1) requestAnimationFrame(tick);
+  }
+  const observer = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting) {
+      requestAnimationFrame(tick);
+      observer.disconnect();
+    }
+  });
+  observer.observe(el);
+})();
+</script>
+</body>
+</html>
